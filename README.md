@@ -19,10 +19,11 @@ recent PyPI releases), and `ckb-cli`'s `wallet transfer` command doesn't
 cleanly support the single-transaction multi-output transfers the
 `batch_payer` archetype needs. So this project talks to the devnet's
 JSON-RPC directly over HTTP (`requests`), with a small hand-rolled
-transaction-construction module (`ckb.py`, ~250 lines) implementing just
-enough Molecule serialization to compute a transaction hash and signing
-message -- `send_transaction` itself takes a plain JSON transaction object,
-so no Molecule encoding is needed for submission, only for hashing/signing.
+transaction-construction package (`ckb/`, split into config/hashing/molecule/
+keys/rpc/transfer modules, each under 250 lines) implementing just enough
+Molecule serialization to compute a transaction hash and signing message --
+`send_transaction` itself takes a plain JSON transaction object, so no
+Molecule encoding is needed for submission, only for hashing/signing.
 
 **Signing:** secp256k1 has no prebuilt Python 3.14 wheel yet for the usual
 `coincurve` binding, and building it from source hit unrelated packaging
@@ -182,7 +183,7 @@ else), so a bot's own successive change outputs form a visible spend chain
 within that bot's own `add_N.json` and correctly flip to `"dead"` once the next round's
 transaction consumes them. Cells sent *to* another bot are real, genuine
 transfers -- verifiable on-chain -- but the receiving bot never spends
-*those specific* cells forward in this simulation (see `simulate.py`'s
+*those specific* cells forward in this simulation (see `worker.py`'s
 `bot_worker` docstring for why), so transfer-recipient outputs legitimately
 stay `"live"` for the life of the dataset, same as a real explorer would
 show for any UTXO nobody has spent yet.

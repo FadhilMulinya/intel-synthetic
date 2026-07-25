@@ -16,12 +16,16 @@ offckb node
 | file | purpose |
 |---|---|
 | `run.sh` | one-shot orchestrator: starts the devnet if needed, launches a detached run |
-| `simulate.py` | entry point: bot roster, archetype logic, funding, concurrent run loop |
-| `ckb.py` | CKB transaction construction, Molecule serialization, signing, JSON-RPC |
+| `simulate.py` | entry point: wires the pieces below into one run (`run_stage`, CLI `main`) |
+| `archetypes.py` | bot roster: keypairs, archetype assignment, per-round output computation |
+| `funding.py` | genesis account discovery, per-bot funding, confirmation polling |
+| `recorder.py` | per-bot NDJSON writer, confirmation watchers, live/dead status patching |
+| `worker.py` | per-bot send loop (`bot_worker`): builds, signs, submits each round |
+| `ckb/` | CKB transaction construction: `config`, `hashing`, `molecule`, `keys`, `rpc`, `transfer` |
 | `secp256k1_pure.py` | pure-Python secp256k1 key derivation + RFC 6979 signing |
 
-See `README.md` for the full architecture write-up, archetype definitions, and
-output schema.
+Every file is kept under 250 lines. See `README.md` for the full
+architecture write-up, archetype definitions, and output schema.
 
 ## Guidelines
 
