@@ -23,9 +23,10 @@ offckb node
 | `worker.py` | per-bot send loop (`bot_worker`): builds, signs, submits each round |
 | `ckb/` | CKB transaction construction: `config`, `hashing`, `molecule`, `keys`, `rpc`, `transfer` |
 | `secp256k1_pure.py` | pure-Python secp256k1 key derivation + RFC 6979 signing |
+| `tests/` | unit tests (offline/mocked) + one opportunistic live-devnet smoke test |
 
-Every file is kept under 250 lines. See `README.md` for the full
-architecture write-up, archetype definitions, and output schema.
+See `README.md` for the full architecture write-up, archetype definitions,
+and output schema.
 
 ## Guidelines
 
@@ -36,8 +37,9 @@ architecture write-up, archetype definitions, and output schema.
   instead of a `coincurve`/`libsecp256k1` binding) -- keep the project
   trivially installable with just `pip install -r requirements.txt`.
 - `data/` (contains private keys) is gitignored; never commit run output.
-- Run `python3 -m py_compile *.py` before submitting a change as a basic
-  sanity check.
+- Run `python3 -m unittest discover -s tests -v` before submitting a change
+  (see README.md's "Running the tests"). It needs nothing installed beyond
+  the standard library and runs offline by default.
 
 ## Submitting changes
 

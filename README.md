@@ -20,7 +20,7 @@ cleanly support the single-transaction multi-output transfers the
 `batch_payer` archetype needs. So this project talks to the devnet's
 JSON-RPC directly over HTTP (`requests`), with a small hand-rolled
 transaction-construction package (`ckb/`, split into config/hashing/molecule/
-keys/rpc/transfer modules, each under 250 lines) implementing just enough
+keys/rpc/transfer modules) implementing just enough
 Molecule serialization to compute a transaction hash and signing message --
 `send_transaction` itself takes a plain JSON transaction object, so no
 Molecule encoding is needed for submission, only for hashing/signing.
@@ -224,6 +224,23 @@ funding = (outputs_per_round x capacity_per_output + fee) x txs_per_bot x 1.5   
 
 using the worst case (`batch_payer`, 3 outputs/round) so every archetype has
 comfortable headroom over its actual per-round spend.
+
+## Running the tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+No extra dependencies needed -- the suite uses only the standard library
+(`unittest` + `unittest.mock`). Almost everything runs fully offline: the
+devnet RPC and `offckb`/`subprocess` calls are mocked, so the suite is fast
+and safe to run with nothing else installed or running.
+
+The one exception is `tests/test_simulate_integration.py`, an end-to-end
+smoke test that opportunistically runs a tiny real `simulate.py` stage
+(7 bots, 1 tx each) against a live devnet on `127.0.0.1:8114` if one happens
+to be reachable, and otherwise skips itself -- it's meant for local
+development or a CI job that starts a devnet first, not for routine runs.
 
 ## Contributing
 

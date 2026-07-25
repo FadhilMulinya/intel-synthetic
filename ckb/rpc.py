@@ -10,7 +10,7 @@ from . import config
 _rpc_id = 0
 
 
-def rpc(method: str, params=None, timeout=15):
+def call_rpc(method: str, params=None, timeout=15):
     global _rpc_id
     _rpc_id += 1
     payload = {"id": _rpc_id, "jsonrpc": "2.0", "method": method, "params": params or []}
@@ -23,12 +23,12 @@ def rpc(method: str, params=None, timeout=15):
 
 
 def get_tip_block_number() -> int:
-    return int(rpc("get_tip_block_number"), 16)
+    return int(call_rpc("get_tip_block_number"), 16)
 
 
 def get_live_cells_for_lock_arg(lock_arg_hex: str, limit_hex="0x3e8"):
     script = {"code_hash": config.SIGHASH_CODE_HASH, "hash_type": "type", "args": lock_arg_hex}
-    result = rpc("get_cells", [{"script": script, "script_type": "lock"}, "asc", limit_hex])
+    result = call_rpc("get_cells", [{"script": script, "script_type": "lock"}, "asc", limit_hex])
     return result["objects"]
 
 
@@ -38,15 +38,15 @@ def get_balance_shannon(lock_arg_hex: str) -> int:
 
 
 def send_transaction(tx_json: dict) -> str:
-    return rpc("send_transaction", [tx_json, "passthrough"])
+    return call_rpc("send_transaction", [tx_json, "passthrough"])
 
 
 def get_transaction(tx_hash: str):
-    return rpc("get_transaction", [tx_hash])
+    return call_rpc("get_transaction", [tx_hash])
 
 
 def get_block_by_number(block_number: int):
-    return rpc("get_block_by_number", [hex(block_number)])
+    return call_rpc("get_block_by_number", [hex(block_number)])
 
 
 def discover_system_script():

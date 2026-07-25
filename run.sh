@@ -16,6 +16,7 @@
 set -euo pipefail
 
 usage() {
+    local exit_code="${1:-1}"
     cat >&2 <<EOF
 Usage: $0 --bots N --hours H --txs T [--out NAME]
 
@@ -24,7 +25,7 @@ Usage: $0 --bots N --hours H --txs T [--out NAME]
   --txs T      transactions per bot (required)
   --out NAME   output folder name under data/ (default: bot_<N>)
 EOF
-    exit 1
+    exit "$exit_code"
 }
 
 BOTS=""
@@ -38,7 +39,7 @@ while [[ $# -gt 0 ]]; do
         --hours) HOURS="${2:-}"; shift 2 ;;
         --txs) TXS="${2:-}"; shift 2 ;;
         --out) OUT="${2:-}"; shift 2 ;;
-        -h|--help) usage ;;
+        -h|--help) usage 0 ;;
         *) echo "error: unknown argument: $1" >&2; usage ;;
     esac
 done

@@ -13,6 +13,12 @@ callers can keep using `import ckb; ckb.foo(...)`. Devnet-discovered state
 (SIGHASH_CODE_HASH, SIGHASH_DEP) is read live via `ckb.config.NAME` rather
 than re-exported by value, since discover_system_script() fills it in after
 this module is first imported.
+
+None of the re-exported names below may collide with a submodule's own
+name (e.g. `rpc`) -- `from .rpc import rpc` would silently rebind the
+`ckb.rpc` attribute from the submodule to that one function, breaking
+`import ckb.rpc` for everyone else. That's why the low-level JSON-RPC call
+below is named `call_rpc`, not `rpc`.
 """
 from . import config
 from .config import RPC_URL, MIN_CELL_CAPACITY_SHANNON, SHANNONS_PER_CKB
@@ -24,7 +30,7 @@ from .molecule import (
 )
 from .keys import generate_keypair, sign_message
 from .rpc import (
-    rpc, get_tip_block_number, get_live_cells_for_lock_arg,
+    call_rpc, get_tip_block_number, get_live_cells_for_lock_arg,
     get_balance_shannon, send_transaction, get_transaction,
     get_block_by_number, discover_system_script,
 )

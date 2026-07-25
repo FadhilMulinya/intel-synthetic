@@ -75,6 +75,17 @@ def assign_params(bots, intervals):
         }
 
     mm = by_archetype["market_maker"]
+    if len(mm) == 1:
+        # "fold a lone leftover into the last pair" below only works once a
+        # prior group already exists to fold into -- with exactly 1 bot
+        # total there is no pair to form at all, and compute_round_outputs
+        # would later divide by zero on an empty partners list. Fail here,
+        # before any funding happens, instead of crashing mid-run.
+        raise ValueError(
+            f"roster of {n} bots yields exactly 1 market_maker bot (index {mm[0]}), "
+            "which has no one to pair with. Use a bot count where market_maker gets "
+            "at least 2 bots (n >= 7)."
+        )
     i = 0
     while i < len(mm):
         if len(mm) - i >= 3 and (len(mm) - i) % 2 == 1:
