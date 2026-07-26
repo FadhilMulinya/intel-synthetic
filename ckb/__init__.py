@@ -31,7 +31,7 @@ from .molecule import (
 from .keys import generate_keypair, sign_message
 from .rpc import (
     call_rpc, get_tip_block_number, get_live_cells_for_lock_arg,
-    get_balance_shannon, send_transaction, get_transaction,
-    get_block_by_number, discover_system_script,
+    get_all_live_cells_for_lock_arg, get_balance_shannon, send_transaction,
+    get_transaction, get_block_by_number, discover_system_script,
 )
 from .transfer import build_and_sign_transfer, build_and_sign_transfer_from_cell

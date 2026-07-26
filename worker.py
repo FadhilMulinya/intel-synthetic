@@ -7,7 +7,7 @@ from archetypes import compute_round_outputs
 from funding import FEE_BASE_SHANNON, FEE_PER_OUTPUT_SHANNON
 
 
-def bot_worker(bot, bots, txs_per_bot, confirm_queue, counters, counters_lock):
+def bot_worker(bot, bots, txs_per_bot, confirm_queue, counters, counters_lock, start_round=0, start_cell=None):
     """Each bot spends its own single-cell UTXO chain, seeded once at funding
     time. The chain is only ever touched by this bot's own thread (no shared
     queue), so there is no cross-thread race on which cell to spend next --
@@ -16,9 +16,16 @@ def bot_worker(bot, bots, txs_per_bot, confirm_queue, counters, counters_lock):
     chain. Real inter-bot transfers still happen and are recorded on-chain
     and in the *sending* bot's own add_N.json (never the recipient's); the
     simulator just doesn't route the recipient's *own* future sends through
-    funds it received from others."""
-    round_num = 0
-    cell = bot["initial_cell"]
+    funds it received from others.
+
+    start_round/start_cell let resume.py continue a bot mid-chain after an
+    interrupted run: start_round keeps archetype pacing (counterparty
+    cycling, market_maker's capacity parity) continuous rather than
+    restarting it, and start_cell is the bot's current on-chain spendable
+    cell rather than its original funding cell. A fresh run leaves both at
+    their defaults."""
+    round_num = start_round
+    cell = start_cell if start_cell is not None else bot["initial_cell"]
     while round_num < txs_per_bot:
         t0 = time.time()
         outputs_idx = compute_round_outputs(bot, round_num)

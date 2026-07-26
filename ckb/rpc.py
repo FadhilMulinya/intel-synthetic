@@ -32,6 +32,29 @@ def get_live_cells_for_lock_arg(lock_arg_hex: str, limit_hex="0x3e8"):
     return result["objects"]
 
 
+def get_all_live_cells_for_lock_arg(lock_arg_hex: str):
+    """Like get_live_cells_for_lock_arg, but follows get_cells' cursor to
+    fetch every page instead of stopping at the first 1000 -- some
+    addresses (e.g. a fan_in_sink's `sink`, which receives a transfer from
+    every feeder every round) can end up with far more live cells than
+    that, and silently truncating would make "the biggest live cell" the
+    wrong answer instead of just an incomplete one."""
+    script = {"code_hash": config.SIGHASH_CODE_HASH, "hash_type": "type", "args": lock_arg_hex}
+    all_cells = []
+    cursor = None
+    while True:
+        params = [{"script": script, "script_type": "lock"}, "asc", "0x3e8"]
+        if cursor:
+            params.append(cursor)
+        result = call_rpc("get_cells", params)
+        objects = result["objects"]
+        all_cells.extend(objects)
+        cursor = result.get("last_cursor")
+        if len(objects) < 1000 or not cursor or cursor == "0x":
+            break
+    return all_cells
+
+
 def get_balance_shannon(lock_arg_hex: str) -> int:
     cells = get_live_cells_for_lock_arg(lock_arg_hex)
     return sum(int(c["output"]["capacity"], 16) for c in cells)
