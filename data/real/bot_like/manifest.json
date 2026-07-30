@@ -498,5 +498,15 @@
     "index": 99,
     "address": "ckb1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqt485s60lj75yksuswl5uyyr7fyclqq2tsk3kxkr",
     "label_source": "bot_like"
+  },
+  {
+    "index": 100,
+    "address": "ckb1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqd7w5u492rs93nr0e0086myx8qdknytcmsw3hx46",
+    "label_source": "bot_like"
+  },
+  {
+    "index": 101,
+    "address": "ckb1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqdkkkugnz4gyqn76qczl78zlnzalysguqql53kq3",
+    "label_source": "bot_like"
   }
 ]
