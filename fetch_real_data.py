@@ -214,13 +214,17 @@ def checkpoint_path(out_dir):
 def load_checkpoint(out_dir):
     path = checkpoint_path(out_dir)
     if not os.path.exists(path):
-        return {
-            "oldest_scanned_block": None,  # None = haven't scanned anything yet, start at tip
-            "discovered": [],              # all addresses ever seen during block-walking
-            "classified": {},              # address -> "bot_like" | "human_like" | null (cached, don't re-query)
-            "fetched": {"bot_like": [], "human_like": []},  # addresses already pulled + written to disk, in file-index order
-        }
-    return json.load(open(path))
+        state = {}
+    else:
+        state = json.load(open(path))
+    # setdefault everything so a checkpoint.json written by an older
+    # version of this script (missing newer keys) still loads cleanly.
+    state.setdefault("oldest_scanned_block", None)  # None = haven't scanned anything yet, start at tip
+    state.setdefault("discovered", [])              # all addresses ever seen during block-walking
+    state.setdefault("classified", {})               # address -> "bot_like" | "human_like" | null (cached, don't re-query)
+    state.setdefault("fetched", {"bot_like": [], "human_like": []})  # addresses already pulled + written to disk, in file-index order
+    state.setdefault("failed", {})                   # address -> error string; permanently skipped after failing once
+    return state
 
 
 def save_checkpoint(out_dir, state):
@@ -281,7 +285,7 @@ def main():
     state["classified"] = classified
     save_checkpoint(args.out_dir, state)
 
-    # --- 3. fetch tx history: top up each pool to --max-per-pool, skipping already-fetched addresses ---
+    # --- 3. fetch tx history: top up each pool to --max-per-pool, skipping already-fetched/failed addresses ---
     pool_candidates = {"bot_like": [], "human_like": []}
     for addr, bucket in classified.items():
         if bucket in pool_candidates:
@@ -291,19 +295,32 @@ def main():
         bucket_dir = os.path.join(args.out_dir, bucket)
         os.makedirs(bucket_dir, exist_ok=True)
         already = set(fetched[bucket])
-        needed = args.max_per_pool - len(fetched[bucket])
-        to_fetch = [a for a in pool_candidates[bucket] if a not in already][:max(needed, 0)]
+        usable = [a for a in pool_candidates[bucket] if a not in already and a not in state["failed"]]
+        needed = max(args.max_per_pool - len(fetched[bucket]), 0)
         print(f"'{bucket}': {len(fetched[bucket])}/{args.max_per_pool} already fetched, "
-              f"pulling {len(to_fetch)} more "
-              f"({len(pool_candidates[bucket]) - len(already) - len(to_fetch)} candidates left unused)...",
-              file=sys.stderr)
-        for addr in to_fetch:
-            txs = fetch_address_transactions(addr, max_tx=args.max_tx_per_address)
+              f"{len(usable)} usable candidates available, need {needed} more...", file=sys.stderr)
+
+        got = 0
+        for addr in usable:
+            if got >= needed:
+                break
+            try:
+                txs = fetch_address_transactions(addr, max_tx=args.max_tx_per_address)
+            except ApiError as e:
+                # A single address's history can be genuinely slow/broken
+                # server-side (e.g. an exchange hot wallet with millions of
+                # txs) -- don't let one bad address kill the whole run.
+                # Blacklist it permanently so future runs don't retry it.
+                print(f"  SKIPPING {addr}: {e}", file=sys.stderr)
+                state["failed"][addr] = str(e)
+                save_checkpoint(args.out_dir, state)
+                continue
             if not txs:
                 continue
             idx = len(fetched[bucket])
             write_address_file(os.path.join(bucket_dir, f"addr_{idx}.json"), addr, txs)
             fetched[bucket].append(addr)
+            got += 1
             state["fetched"] = fetched
             save_checkpoint(args.out_dir, state)  # checkpoint after EVERY address -- a crash loses at most one
 
