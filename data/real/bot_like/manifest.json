@@ -773,5 +773,15 @@
     "index": 154,
     "address": "ckb1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqt5w5jtzg2qf05s9u53cj2gv47v0uvu8dcwlvrqc",
     "label_source": "bot_like"
+  },
+  {
+    "index": 155,
+    "address": "ckb1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqwqkl23ey6ndp7q5vss36xfjhnq3pwnmjsqhs3p2",
+    "label_source": "bot_like"
+  },
+  {
+    "index": 156,
+    "address": "ckb1qrgqep8saj8agswr30pls73hra28ry8jlnlc3ejzh3dl2ju7xxpjxqgqqxamnrpernhha9nsyus0k6f8a6ays6t0cusm37pn",
+    "label_source": "bot_like"
   }
 ]
