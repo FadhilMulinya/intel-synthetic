@@ -493,5 +493,10 @@
     "index": 98,
     "address": "ckb1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqwqupqxkgplmfy3asuqdu9cmalk9rtnzvsfzlksx",
     "label_source": "human_like"
+  },
+  {
+    "index": 99,
+    "address": "ckb1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqf898lf4kmgg2lyz0lm32kcrhn66kt4m6qtsruh0",
+    "label_source": "human_like"
   }
 ]
