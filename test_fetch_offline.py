@@ -1,8 +1,3 @@
-"""Offline sanity check for fetch_real_data.py's parsing logic, using
-fixtures shaped exactly like the documented Explorer API responses.
-No network calls -- this only proves the code paths are correct against
-the schema; it can't catch live-API surprises (rate limits, schema drift).
-"""
 import json
 import os
 import sys
@@ -80,9 +75,6 @@ def fake_api_get(path, params=None, **kwargs):
 
 def run():
     with mock.patch.object(frd, "api_get", side_effect=fake_api_get):
-        # discovery: should find 3 unique addrs, cellbase output excluded
-        # only insofar as its OWN tx is skipped, but ckb1addrMINER still
-        # wasn't emitted by any non-cellbase tx, so it should NOT appear.
         addrs = frd.discover_addresses(start_block=1000, end_block=999, page_size=10)
         assert addrs == {"ckb1addrBOT", "ckb1addrHUMAN"}, f"unexpected discovery set: {addrs}"
         print("PASS: discover_addresses excludes cellbase-only addresses ->", addrs)

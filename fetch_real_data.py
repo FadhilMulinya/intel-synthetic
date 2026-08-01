@@ -1,48 +1,3 @@
-"""
-fetch_real_data.py
-
-Pulls real CKB mainnet address activity from the public CKB Explorer API and
-writes it out in the same flattened per-address NDJSON shape that
-ckb-bot-simulator's `data/run_*/add_N.json` files use, so it can be fed
-straight into `extract_features.py` unchanged.
-
-WHY TWO POOLS, AND WHY THESE SPECIFIC SIGNALS
------------------------------------------------
-The whole point of pulling real data is to stress-test the one-class model
-with something other than synthetic bots and a synthetic human proxy. But if
-we *select* addresses using the same signal the model scores on (interval
-regularity, tx volume), any resulting numbers are circular -- we'd just be
-asking the model to rediscover the rule we used to build the labels.
-
-So addresses are bucketed on signals that are orthogonal to the model's
-feature set:
-
-  bot_like  : Explorer's own `is_special` flag (known exchange / DEX /
-              contract / mining-pool addresses) -- automated by *identity*,
-              not by inferred timing pattern.
-  human_like: very low lifetime `transactions_count` and *not* flagged
-              special -- a proxy for "casual wallet", not proof of humanity.
-              Still a heuristic, but it's an identity/lifetime-count filter,
-              not an interval-CV or volume filter, so it doesn't leak into
-              the axis being measured.
-
-These are still proxy labels, not ground truth. Use this data for
-EVALUATION of the trained one-class models, not as a second training class
-(the model should stay one-class, trained on bot data only).
-
-USAGE
------
-    pip install requests
-    python3 fetch_real_data.py \
-        --n-blocks 500 \
-        --max-per-pool 40 \
-        --max-tx-per-address 300 \
-        --out-dir data/real
-
-Respect the public API: this script rate-limits itself (default 4 req/s)
-and backs off on 429s. Don't crank concurrency against a free public
-endpoint.
-"""
 import argparse
 import json
 import os
@@ -95,9 +50,6 @@ def api_get(path, params=None, min_interval=0.25, max_retries=6, timeout=20, max
                 return None  # e.g. "Record Not Found" for an address with no txs
             raise ApiError(f"GET {url} -> HTTP {e.code}: {e.read()[:300]}")
         except (urllib.error.URLError, socket.timeout, ConnectionError, TimeoutError, OSError) as e:
-            # Raw read-timeouts (socket.timeout) aren't always wrapped in
-            # URLError by urllib -- catch broadly here so transient network
-            # hiccups get retried instead of killing the whole run.
             last_err = e
             time.sleep(delay)
             delay = min(delay * 2, max_delay)
@@ -110,9 +62,6 @@ def get_tip_block_number():
 
 
 def get_block_hash(block_num):
-    """/block_transactions requires a block HASH, not a number, despite the
-    (stale, 2023) docs showing a number in the example curl call -- as of
-    this writing it 422s on a bare number. Resolve number -> hash first."""
     data = api_get(f"/blocks/{block_num}")
     if not data or not data.get("data"):
         return None
@@ -120,9 +69,6 @@ def get_block_hash(block_num):
 
 
 def discover_addresses(start_block, end_block, page_size=40):
-    """Walk blocks (start_block down to end_block+1, inclusive of start_block)
-    and collect unique addresses seen in transaction inputs/outputs. Cellbase
-    (miner reward) outputs are skipped since those aren't wallet activity."""
     seen = set()
     for block_num in range(start_block, end_block, -1):
         block_hash = get_block_hash(block_num)
@@ -143,18 +89,10 @@ def discover_addresses(start_block, end_block, page_size=40):
 
 
 def classify_address(address, human_max_tx=50, bot_min_tx=1000):
-    """Fetch an address's summary and bucket it using identity/lifetime
-    signals only -- never interval or amount regularity. Returns
-    (bucket_or_None, tx_count) -- tx_count is kept even for unbucketed
-    addresses so callers can decide whether fetching history is worth it."""
     data = api_get(f"/addresses/{address}")
     if not data or not data.get("data"):
         return None, 0
     record = data["data"]
-    # Some addresses (e.g. full-format addresses backing multiple lock-script
-    # variants) return `data` as a list of records instead of a single
-    # object. When that happens, sum tx counts and OR the special flag
-    # across records rather than picking one arbitrarily.
     records = record if isinstance(record, list) else [record]
     tx_count = 0
     is_special = False
@@ -171,22 +109,6 @@ def classify_address(address, human_max_tx=50, bot_min_tx=1000):
 
 
 def fetch_address_transactions(address, max_tx=300, page_size=50):
-    """Pull an address's MOST RECENT tx history (capped at max_tx) and
-    flatten it into the same per-line shape as ckb-bot-simulator's
-    add_N.json (drops the JSON:API id/type wrapper, keeps `attributes`
-    fields flat).
-
-    Sorted time.desc (most recent first) rather than time.asc: for
-    addresses with huge lifetime histories, ascending-from-genesis queries
-    are the ones observed to time out server-side, while recent-first is
-    the standard "give me the latest page" access pattern explorers index
-    for. This also means the sample reflects CURRENT behavior rather than
-    behavior from years ago, which is arguably more relevant anyway.
-
-    Uses a smaller retry budget than the default api_get() -- if an
-    address's history is going to time out, better to find out in ~15s and
-    move on to the next candidate than burn ~60s per bad address.
-    """
     out = []
     page = 1
     while len(out) < max_tx:
@@ -202,10 +124,6 @@ def fetch_address_transactions(address, max_tx=300, page_size=50):
             break
         for tx in rows:
             attrs = dict(tx.get("attributes", {}))
-            # Address Transaction List doesn't return transaction_fee (only
-            # the singular Transaction endpoint does). Rather than 1 extra
-            # API call per tx (expensive against a shared public endpoint),
-            # default it to "0" and flag the field as unreliable downstream.
             attrs.setdefault("transaction_fee", "0")
             out.append(attrs)
             if len(out) >= max_tx:
@@ -233,13 +151,11 @@ def load_checkpoint(out_dir):
         state = {}
     else:
         state = json.load(open(path))
-    # setdefault everything so a checkpoint.json written by an older
-    # version of this script (missing newer keys) still loads cleanly.
-    state.setdefault("oldest_scanned_block", None)  # None = haven't scanned anything yet, start at tip
-    state.setdefault("discovered", [])              # all addresses ever seen during block-walking
-    state.setdefault("classified", {})               # address -> "bot_like" | "human_like" | null (cached, don't re-query)
-    state.setdefault("fetched", {"bot_like": [], "human_like": []})  # addresses already pulled + written to disk, in file-index order
-    state.setdefault("failed", {})                   # address -> error string; permanently skipped after failing once
+    state.setdefault("oldest_scanned_block", None)  
+    state.setdefault("discovered", [])              
+    state.setdefault("classified", {})               
+    state.setdefault("fetched", {"bot_like": [], "human_like": []}) 
+    state.setdefault("failed", {})                  
     return state
 
 
@@ -248,13 +164,10 @@ def save_checkpoint(out_dir, state):
     tmp_path = checkpoint_path(out_dir) + ".tmp"
     with open(tmp_path, "w") as f:
         json.dump(state, f)
-    os.replace(tmp_path, checkpoint_path(out_dir))  # atomic-ish, avoids truncated file on crash mid-write
+    os.replace(tmp_path, checkpoint_path(out_dir)) 
 
 
 def entry_bucket(entry):
-    """classified[addr] is {'bucket':..., 'tx_count':...} in current
-    checkpoints, but older checkpoints stored a plain bucket string (or
-    None) -- handle both so old checkpoint.json files keep working."""
     if isinstance(entry, dict):
         return entry.get("bucket")
     return entry
@@ -343,10 +256,6 @@ def main():
                 break
             tx_count = entry_tx_count(classified.get(addr))
             if tx_count > args.skip_tx_count_above:
-                # These are the addresses observed to time out even on page
-                # 1 -- their history query itself is slow server-side, not
-                # something our page-size/max_tx cap controls. Skip without
-                # even trying, instead of burning retries to find out.
                 print(f"  SKIPPING {addr}: {tx_count} lifetime txs > "
                       f"--skip-tx-count-above {args.skip_tx_count_above}, proactively skipped", file=sys.stderr)
                 state["failed"][addr] = f"proactively skipped: {tx_count} lifetime txs"
@@ -355,10 +264,6 @@ def main():
             try:
                 txs = fetch_address_transactions(addr, max_tx=args.max_tx_per_address)
             except ApiError as e:
-                # A single address's history can be genuinely slow/broken
-                # server-side (e.g. an exchange hot wallet with millions of
-                # txs) -- don't let one bad address kill the whole run.
-                # Blacklist it permanently so future runs don't retry it.
                 print(f"  SKIPPING {addr}: {e}", file=sys.stderr)
                 state["failed"][addr] = str(e)
                 save_checkpoint(args.out_dir, state)
