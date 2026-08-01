@@ -1,0 +1,180 @@
+{
+  "model_selected": "RandomForest",
+  "cv_model_comparison": {
+    "LogisticRegression": {
+      "accuracy": {
+        "mean": 0.8562,
+        "std": 0.0282
+      },
+      "precision": {
+        "mean": 0.9447,
+        "std": 0.0319
+      },
+      "recall": {
+        "mean": 0.825,
+        "std": 0.0486
+      },
+      "f1": {
+        "mean": 0.8794,
+        "std": 0.0257
+      },
+      "roc_auc": {
+        "mean": 0.9284,
+        "std": 0.0278
+      }
+    },
+    "RandomForest": {
+      "accuracy": {
+        "mean": 0.9523,
+        "std": 0.0256
+      },
+      "precision": {
+        "mean": 0.9378,
+        "std": 0.0289
+      },
+      "recall": {
+        "mean": 0.9917,
+        "std": 0.0167
+      },
+      "f1": {
+        "mean": 0.9637,
+        "std": 0.0194
+      },
+      "roc_auc": {
+        "mean": 0.9863,
+        "std": 0.0136
+      }
+    },
+    "GradientBoosting": {
+      "accuracy": {
+        "mean": 0.9418,
+        "std": 0.0421
+      },
+      "precision": {
+        "mean": 0.9489,
+        "std": 0.0634
+      },
+      "recall": {
+        "mean": 0.9667,
+        "std": 0.0312
+      },
+      "f1": {
+        "mean": 0.9558,
+        "std": 0.0299
+      },
+      "roc_auc": {
+        "mean": 0.9833,
+        "std": 0.0174
+      }
+    },
+    "SVM-RBF": {
+      "accuracy": {
+        "mean": 0.8724,
+        "std": 0.0193
+      },
+      "precision": {
+        "mean": 0.9387,
+        "std": 0.0347
+      },
+      "recall": {
+        "mean": 0.8583,
+        "std": 0.0425
+      },
+      "f1": {
+        "mean": 0.8953,
+        "std": 0.0177
+      },
+      "roc_auc": {
+        "mean": 0.9546,
+        "std": 0.0193
+      }
+    }
+  },
+  "held_out_test_eval": {
+    "eval_set": "held_out_real_test_split",
+    "n_bot_examples": 40,
+    "n_human_examples": 23,
+    "accuracy": 0.9524,
+    "precision_bot": 0.9512,
+    "recall_bot": 0.975,
+    "f1_bot": 0.963,
+    "roc_auc": 0.9924,
+    "confusion_matrix": {
+      "true_bot_pred_bot": 39,
+      "true_bot_pred_human": 1,
+      "true_human_pred_bot": 2,
+      "true_human_pred_human": 21
+    }
+  },
+  "accuracy_by_history_length": [
+    {
+      "bucket": "n_tx < 5 (degenerate)",
+      "n": 11,
+      "accuracy": 1.0
+    },
+    {
+      "bucket": "n_tx 5-20",
+      "n": 4,
+      "accuracy": 1.0
+    },
+    {
+      "bucket": "n_tx 21+",
+      "n": 48,
+      "accuracy": 0.9375
+    }
+  ],
+  "feature_importance": {
+    "interval_max_over_mean": 0.2873,
+    "n_unique_counterparties": 0.1601,
+    "interval_cv": 0.1537,
+    "interval_mean_log": 0.1464,
+    "counterparty_entropy_norm": 0.0799,
+    "capacity_cv": 0.0699,
+    "mean_outputs_per_tx": 0.0558,
+    "max_over_mean_outputs": 0.037,
+    "inbound_only_tx_frac": 0.01,
+    "fee_cv": 0.0
+  },
+  "uncertain_band_selection": {
+    "chosen_band": {
+      "lo": 0.4,
+      "hi": 0.6
+    },
+    "cv_band_comparison": {
+      "0.5-0.5": {
+        "mean_confident_accuracy": 0.9562,
+        "mean_coverage": 1.0
+      },
+      "0.4-0.6": {
+        "mean_confident_accuracy": 0.9788,
+        "mean_coverage": 0.9443
+      },
+      "0.35-0.65": {
+        "mean_confident_accuracy": 0.9829,
+        "mean_coverage": 0.9324
+      },
+      "0.3-0.7": {
+        "mean_confident_accuracy": 0.9827,
+        "mean_coverage": 0.9245
+      },
+      "0.25-0.75": {
+        "mean_confident_accuracy": 0.9915,
+        "mean_coverage": 0.9005
+      },
+      "0.2-0.8": {
+        "mean_confident_accuracy": 0.9911,
+        "mean_coverage": 0.8686
+      }
+    },
+    "min_confident_accuracy_target": 0.97,
+    "note": "Selected via 5-fold stratified CV with sigmoid-calibrated probabilities inside each fold (not a single held-out split), so this reflects average out-of-sample behavior. Sample size is still small (~250 rows total) -- treat mean_coverage/mean_confident_accuracy as directional, and re-run this selection whenever real_features.json grows."
+  },
+  "synthetic_stress_test": null,
+  "training_composition": {
+    "n_bot_like": 160,
+    "n_human_like": 91,
+    "n_short_history_rows": 57,
+    "min_tx_filter_applied": 0
+  },
+  "label_provenance_warning": "bot_like / human_like are heuristic proxy labels (is_special / lifetime tx count), not verified ground truth. All metrics above are bounded by that heuristic's quality -- read as a strong directional signal, not a certified real-world error rate. See train_eval.py module docstring for full caveats."
+}
