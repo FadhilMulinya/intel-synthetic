@@ -64,7 +64,7 @@ class ApiError(Exception):
     pass
 
 
-def api_get(path, params=None, min_interval=0.25, max_retries=6):
+def api_get(path, params=None, min_interval=0.25, max_retries=6, timeout=20, max_delay=30):
     """GET against the Explorer API with polite rate limiting and backoff.
 
     min_interval: minimum seconds between calls (self-imposed politeness).
@@ -81,7 +81,7 @@ def api_get(path, params=None, min_interval=0.25, max_retries=6):
     for attempt in range(max_retries):
         req = urllib.request.Request(url, headers=HEADERS)
         try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
             time.sleep(min_interval)
             return data
@@ -89,7 +89,7 @@ def api_get(path, params=None, min_interval=0.25, max_retries=6):
             if e.code == 429 or e.code >= 500:
                 last_err = e
                 time.sleep(delay)
-                delay = min(delay * 2, 30)
+                delay = min(delay * 2, max_delay)
                 continue
             if e.code == 404:
                 return None  # e.g. "Record Not Found" for an address with no txs
@@ -100,7 +100,7 @@ def api_get(path, params=None, min_interval=0.25, max_retries=6):
             # hiccups get retried instead of killing the whole run.
             last_err = e
             time.sleep(delay)
-            delay = min(delay * 2, 30)
+            delay = min(delay * 2, max_delay)
     raise ApiError(f"GET {url} failed after {max_retries} retries: {last_err}")
 
 
@@ -144,10 +144,12 @@ def discover_addresses(start_block, end_block, page_size=40):
 
 def classify_address(address, human_max_tx=50, bot_min_tx=1000):
     """Fetch an address's summary and bucket it using identity/lifetime
-    signals only -- never interval or amount regularity."""
+    signals only -- never interval or amount regularity. Returns
+    (bucket_or_None, tx_count) -- tx_count is kept even for unbucketed
+    addresses so callers can decide whether fetching history is worth it."""
     data = api_get(f"/addresses/{address}")
     if not data or not data.get("data"):
-        return None
+        return None, 0
     record = data["data"]
     # Some addresses (e.g. full-format addresses backing multiple lock-script
     # variants) return `data` as a list of records instead of a single
@@ -162,22 +164,36 @@ def classify_address(address, human_max_tx=50, bot_min_tx=1000):
         is_special = is_special or (str(attrs.get("is_special", "false")).lower() == "true")
 
     if is_special or tx_count >= bot_min_tx:
-        return "bot_like"
+        return "bot_like", tx_count
     if 1 <= tx_count <= human_max_tx and not is_special:
-        return "human_like"
-    return None  # ambiguous middle ground -- don't guess, just skip
+        return "human_like", tx_count
+    return None, tx_count  # ambiguous middle ground -- don't guess, just skip
 
 
 def fetch_address_transactions(address, max_tx=300, page_size=50):
-    """Pull an address's tx history and flatten it into the same per-line
-    shape as ckb-bot-simulator's add_N.json (drops the JSON:API id/type
-    wrapper, keeps `attributes` fields flat)."""
+    """Pull an address's MOST RECENT tx history (capped at max_tx) and
+    flatten it into the same per-line shape as ckb-bot-simulator's
+    add_N.json (drops the JSON:API id/type wrapper, keeps `attributes`
+    fields flat).
+
+    Sorted time.desc (most recent first) rather than time.asc: for
+    addresses with huge lifetime histories, ascending-from-genesis queries
+    are the ones observed to time out server-side, while recent-first is
+    the standard "give me the latest page" access pattern explorers index
+    for. This also means the sample reflects CURRENT behavior rather than
+    behavior from years ago, which is arguably more relevant anyway.
+
+    Uses a smaller retry budget than the default api_get() -- if an
+    address's history is going to time out, better to find out in ~15s and
+    move on to the next candidate than burn ~60s per bad address.
+    """
     out = []
     page = 1
     while len(out) < max_tx:
         data = api_get(
             f"/address_transactions/{address}",
-            params={"page": page, "page_size": page_size, "sort": "time.asc"},
+            params={"page": page, "page_size": page_size, "sort": "time.desc"},
+            max_retries=3, timeout=15, max_delay=8,
         )
         if not data or not data.get("data"):
             break
@@ -235,14 +251,32 @@ def save_checkpoint(out_dir, state):
     os.replace(tmp_path, checkpoint_path(out_dir))  # atomic-ish, avoids truncated file on crash mid-write
 
 
+def entry_bucket(entry):
+    """classified[addr] is {'bucket':..., 'tx_count':...} in current
+    checkpoints, but older checkpoints stored a plain bucket string (or
+    None) -- handle both so old checkpoint.json files keep working."""
+    if isinstance(entry, dict):
+        return entry.get("bucket")
+    return entry
+
+
+def entry_tx_count(entry):
+    if isinstance(entry, dict):
+        return entry.get("tx_count", 0)
+    return 0  # unknown for old-format entries -- treated as "not huge"
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--n-blocks", type=int, default=500, help="how many additional (older) blocks to scan THIS run")
     ap.add_argument("--block-page-size", type=int, default=40)
     ap.add_argument("--max-per-pool", type=int, default=40, help="target addresses per bucket, ACROSS ALL RUNS (resumable)")
-    ap.add_argument("--max-tx-per-address", type=int, default=300)
+    ap.add_argument("--max-tx-per-address", type=int, default=300, help="sample cap per wallet -- NOT all history, just the most recent N")
     ap.add_argument("--human-max-tx", type=int, default=50, help="lifetime tx count ceiling for the human_like bucket")
     ap.add_argument("--bot-min-tx", type=int, default=1000, help="lifetime tx count floor for the bot_like bucket")
+    ap.add_argument("--skip-tx-count-above", type=int, default=200_000,
+                     help="proactively skip fetching history for addresses with more lifetime txs than this -- "
+                          "these are the ones observed to time out server-side even on page 1, so don't bother trying")
     ap.add_argument("--out-dir", default="data/real")
     args = ap.parse_args()
 
@@ -274,12 +308,13 @@ def main():
     print(f"classifying {len(to_classify)} not-yet-classified addresses "
           f"({len(classified)} already cached)...", file=sys.stderr)
     for i, addr in enumerate(to_classify):
-        classified[addr] = classify_address(addr, human_max_tx=args.human_max_tx, bot_min_tx=args.bot_min_tx)
+        bucket, tx_count = classify_address(addr, human_max_tx=args.human_max_tx, bot_min_tx=args.bot_min_tx)
+        classified[addr] = {"bucket": bucket, "tx_count": tx_count}
         if i % 25 == 0:
             state["classified"] = classified
             save_checkpoint(args.out_dir, state)
-            b = sum(1 for v in classified.values() if v == "bot_like")
-            h = sum(1 for v in classified.values() if v == "human_like")
+            b = sum(1 for v in classified.values() if entry_bucket(v) == "bot_like")
+            h = sum(1 for v in classified.values() if entry_bucket(v) == "human_like")
             print(f"  classified {i}/{len(to_classify)} new "
                   f"(pools so far: bot_like={b}, human_like={h})", file=sys.stderr)
     state["classified"] = classified
@@ -287,7 +322,8 @@ def main():
 
     # --- 3. fetch tx history: top up each pool to --max-per-pool, skipping already-fetched/failed addresses ---
     pool_candidates = {"bot_like": [], "human_like": []}
-    for addr, bucket in classified.items():
+    for addr, entry in classified.items():
+        bucket = entry_bucket(entry)
         if bucket in pool_candidates:
             pool_candidates[bucket].append(addr)
 
@@ -298,12 +334,24 @@ def main():
         usable = [a for a in pool_candidates[bucket] if a not in already and a not in state["failed"]]
         needed = max(args.max_per_pool - len(fetched[bucket]), 0)
         print(f"'{bucket}': {len(fetched[bucket])}/{args.max_per_pool} already fetched, "
-              f"{len(usable)} usable candidates available, need {needed} more...", file=sys.stderr)
+              f"{len(usable)} usable candidates available, need {needed} more "
+              f"(sampling up to {args.max_tx_per_address} most-recent txs per wallet)...", file=sys.stderr)
 
         got = 0
         for addr in usable:
             if got >= needed:
                 break
+            tx_count = entry_tx_count(classified.get(addr))
+            if tx_count > args.skip_tx_count_above:
+                # These are the addresses observed to time out even on page
+                # 1 -- their history query itself is slow server-side, not
+                # something our page-size/max_tx cap controls. Skip without
+                # even trying, instead of burning retries to find out.
+                print(f"  SKIPPING {addr}: {tx_count} lifetime txs > "
+                      f"--skip-tx-count-above {args.skip_tx_count_above}, proactively skipped", file=sys.stderr)
+                state["failed"][addr] = f"proactively skipped: {tx_count} lifetime txs"
+                save_checkpoint(args.out_dir, state)
+                continue
             try:
                 txs = fetch_address_transactions(addr, max_tx=args.max_tx_per_address)
             except ApiError as e:

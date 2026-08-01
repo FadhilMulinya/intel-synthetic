@@ -87,10 +87,10 @@ def run():
         assert addrs == {"ckb1addrBOT", "ckb1addrHUMAN"}, f"unexpected discovery set: {addrs}"
         print("PASS: discover_addresses excludes cellbase-only addresses ->", addrs)
 
-        assert frd.classify_address("ckb1addrBOT", human_max_tx=50, bot_min_tx=1000) == "bot_like"
-        assert frd.classify_address("ckb1addrHUMAN", human_max_tx=50, bot_min_tx=1000) == "human_like"
-        assert frd.classify_address("ckb1addrMINER", human_max_tx=50, bot_min_tx=1000) is None
-        print("PASS: classify_address buckets correctly on tx-count/is_special only")
+        assert frd.classify_address("ckb1addrBOT", human_max_tx=50, bot_min_tx=1000) == ("bot_like", 5000)
+        assert frd.classify_address("ckb1addrHUMAN", human_max_tx=50, bot_min_tx=1000) == ("human_like", 12)
+        assert frd.classify_address("ckb1addrMINER", human_max_tx=50, bot_min_tx=1000) == (None, 300)
+        print("PASS: classify_address buckets correctly on tx-count/is_special only, and returns tx_count")
 
         txs = frd.fetch_address_transactions("ckb1addrHUMAN", max_tx=300, page_size=50)
         assert len(txs) == 1
