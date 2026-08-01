@@ -793,5 +793,10 @@
     "index": 158,
     "address": "ckb1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsq0k8gu6ynsad22synmfldq806qtp7mpkpcxd0jp5",
     "label_source": "bot_like"
+  },
+  {
+    "index": 159,
+    "address": "ckb1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqf8dmcwxvvdpwl6uefpwajgydh4un9yulqxl5y8f",
+    "label_source": "bot_like"
   }
 ]
